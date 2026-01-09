@@ -2,7 +2,7 @@ name: Posli Menu
 on:
   workflow_dispatch:
   schedule:
-      - cron: '45 13 * * 5'
+      - cron: '0 7 * * 1'
 
 jobs:
   run_script:
