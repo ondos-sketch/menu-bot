@@ -4,7 +4,7 @@ import re
 
 def ziskaj_a_posli_menu():
     # AKTUALIZOVANÝ WEBHOOK
-    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAF14T8YI/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=Boziy19yv5w-4lpdFD2Mz0u6HSByFWMCznQTl6QxZTU"
+    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAEcGOcC4/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=dAQZOZvcdeC7pYOTXTbCMUDVhJfrqSO8gmy1cbocUxQ"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
