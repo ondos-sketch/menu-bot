@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Bez zmeny, funguje správne) ---
+    # --- 1. EL TORO (Bez zmeny) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -34,14 +34,13 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Opravené ceny a vrátené oddelovače dní) ---
+    # --- 2. SENTAMI (Nová logika riadkovania a čistenia) ---
     try:
         res_s = requests.get("https://sentami.sk/kategoria/denne-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content.decode('utf-8', 'ignore'), 'html.parser')
         
-        # Získame riadky a najskôr opravíme rozbité ceny v celom texte
+        # Oprava rozbitých cien hneď na začiatku
         raw_text = soup_s.get_text(separator="\n", strip=True)
-        # Oprava cien rozdelených do riadkov: "8,1" + "0" + "€" -> "8,10 €"
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', raw_text)
 
@@ -52,32 +51,47 @@ def ziskaj_a_posli_menu():
             menu_s = raw_text[start_s:].strip()
 
             vycistene_riadky = []
+            prefix = "" # Tu si ukladáme 1., 2., Špeciál:
+            
             for r in menu_s.split('\n'):
                 r = r.strip()
                 if not r: continue
                 
-                # Identifikácia dňa - pridáme oddelovač 🔹
+                # Identifikácia dňa
                 if any(den == r for den in dni_tyzdna + ["Týždenná ponuka:"]):
                     vycistene_riadky.append(f"\n🔹 *{r}*")
+                    prefix = "" 
                     continue
 
-                # Čistenie riadku s jedlom a cenou
+                # Ak je riadok len poradové číslo alebo kategória, odložíme si ho
+                if re.match(r'^(\d+\.|Špeciál:|Šalát:)$', r):
+                    prefix = r
+                    continue
+
+                # Spracovanie riadku s jedlom
                 if "€" in r:
                     match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                     cena = match_cena.group() if match_cena else ""
+                    # Orezanie za ( alebo *
+                    nazov = re.split(r'\(|\*', r)[0].strip()
                     
-                    # Odstránenie všetkého od znaku ( alebo * (podľa vašej požiadavky)
-                    názov_jedla = re.split(r'\(|\*', r)[0].strip()
-                    
-                    # Ak po odrezaní niečo ostalo, spojíme to s jednou cenou
-                    if názov_jedla and názov_jedla not in ["1.", "2.", "Špeciál:", "Šalát:"]:
-                        vycistene_riadky.append(f"{názov_jedla} {cena}")
+                    # Spojíme všetko do jedného riadku
+                    vycistene_riadky.append(f"{prefix} {nazov} {cena}".strip())
+                    prefix = "" # Reset po vypísaní jedla
+                else:
+                    # Ak riadok nemá cenu, ale máme prefix, čakáme na cenu v ďalšom riadku
+                    # Ak nemáme prefix, je to len bežný text (napr. polievka)
+                    if prefix:
+                        # Ak riadok obsahuje ( alebo *, odrežeme to
+                        r = re.split(r'\(|\*', r)[0].strip()
+                        prefix = f"{prefix} {r}"
                     else:
                         vycistene_riadky.append(r)
-                else:
-                    vycistene_riadky.append(r)
 
             final_menu_s = "\n".join(vycistene_riadky)
+            # Finálne vymazanie prípadných zdvojených cien, ak by nejaké ostali
+            final_menu_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', final_menu_s)
+            
             requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{final_menu_s.strip()}"})
     except: pass
 
