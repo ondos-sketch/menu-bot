@@ -3,12 +3,11 @@ from bs4 import BeautifulSoup
 import re
 
 def ziskaj_a_posli_menu():
-    # TVOJ AKTUALIZOVANÝ WEBHOOK
     webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAF14T8YI/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=Boziy19yv5w-4lpdFD2Mz0u6HSByFWMCznQTl6QxZTU"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Už nastavené s polievkou a číslovaním) ---
+    # --- 1. EL TORO ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -35,7 +34,7 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Nové čistenie: bez gramáže a alergénov) ---
+    # --- 2. SENTAMI ---
     try:
         res_s = requests.get("https://sentami.sk/kategoria/denne-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -47,11 +46,15 @@ def ziskaj_a_posli_menu():
                 text_s = text_s.split("Späť")[0]
             menu_s = text_s[start_s:].strip()
             
-            # ODSTRÁNENIE ALERGÉNOV (text v zátvorkách so slashmi ako /1,3,7/)
-            menu_s = re.sub(r'/\s*[\d\s,]+/', '', menu_s)
-            
-            # ODSTRÁNENIE GRAMÁŽE (čísla nasledované g, l, ml, dcl)
+            # 1. Odstránenie gramáže (napr. 150g, 0,33l)
             menu_s = re.sub(r'\d+([.,]\d+)?\s*(g|l|ml|dcl)\b', '', menu_s, flags=re.IGNORECASE)
+            
+            # 2. Odstránenie textu od zátvorky ( po cenu (ponechá len cenu na konci riadku)
+            # Hľadá text, ktorý začína "(" a končí tesne pred sumou s "€"
+            menu_s = re.sub(r'\(.*?(?=\d+[,.]\d+\s*€)', '', menu_s)
+            
+            # 3. Odstránenie zvyšných alergénov v tvare /1,3,7/ ak tam ostali
+            menu_s = re.sub(r'/\s*[\d\s,]+/', '', menu_s)
             
             # Formátovanie dní
             for den in dni_tyzdna + ["Týždenná ponuka"]:
