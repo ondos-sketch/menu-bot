@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO ---
+    # --- 1. EL TORO (Ponechané bez zmeny, funguje správne) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -34,7 +34,7 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI ---
+    # --- 2. SENTAMI (Nové agresívne čistenie cez ( a *) ---
     try:
         res_s = requests.get("https://sentami.sk/kategoria/denne-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -51,28 +51,23 @@ def ziskaj_a_posli_menu():
                 r = riadok.strip()
                 if not r: continue
                 
-                # Ak riadok obsahuje cenu (napr. 8,90 €), vymaž všetko medzi textom a cenou
+                # Ak je v riadku cena, ideme čistiť
                 if "€" in r:
-                    # Nájde pozíciu ceny (napr. 10,50 €)
                     match_cena = re.search(r'\d+[,.]\d+\s*€', r)
-                    if match_cena:
-                        cena = match_cena.group()
-                        # Zoberie text pred prvou zátvorkou alebo pred prvým číslom gramáže
-                        # Ak tam nie je zátvorka, proste usekne všetko pred cenou
-                        text_jedla = re.split(r'\(|\d+\s*(g|l|ml|dcl)', r)[0].strip()
-                        # Ak je riadok dňa (Pondelok atď), neupravuj ho tak agresívne
-                        if any(den in r for den in dni_tyzdna + ["Týždenná ponuka"]):
-                             vycistene_riadky.append(r)
-                        else:
-                             vycistene_riadky.append(f"{text_jedla} {cena}")
-                    else:
+                    cena = match_cena.group() if match_cena else ""
+                    
+                    # Odstránime všetko od znaku ( alebo *
+                    r_clean = re.split(r'\(|\*', r)[0].strip()
+                    
+                    # Ak po odrezaní ostal prázdny názov alebo je to len deň, necháme pôvodný riadok
+                    if any(den in r for den in dni_tyzdna + ["Týždenná ponuka"]):
                         vycistene_riadky.append(r)
+                    else:
+                        vycistene_riadky.append(f"{r_clean} {cena}")
                 else:
                     vycistene_riadky.append(r)
 
             final_menu_s = "\n".join(vycistene_riadky)
-            
-            # Formátovanie dní modrými odrážkami
             for den in dni_tyzdna + ["Týždenná ponuka"]:
                 final_menu_s = final_menu_s.replace(den, f"\n\n🔹 *{den}*")
             
