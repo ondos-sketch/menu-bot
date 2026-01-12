@@ -57,4 +57,27 @@ def ziskaj_a_posli_menu():
                     match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                     if match_cena:
                         cena = match_cena.group()
-                        # Zoberie text pred prvou zátv
+                        # Zoberie text pred prvou zátvorkou alebo pred prvým číslom gramáže
+                        # Ak tam nie je zátvorka, proste usekne všetko pred cenou
+                        text_jedla = re.split(r'\(|\d+\s*(g|l|ml|dcl)', r)[0].strip()
+                        # Ak je riadok dňa (Pondelok atď), neupravuj ho tak agresívne
+                        if any(den in r for den in dni_tyzdna + ["Týždenná ponuka"]):
+                             vycistene_riadky.append(r)
+                        else:
+                             vycistene_riadky.append(f"{text_jedla} {cena}")
+                    else:
+                        vycistene_riadky.append(r)
+                else:
+                    vycistene_riadky.append(r)
+
+            final_menu_s = "\n".join(vycistene_riadky)
+            
+            # Formátovanie dní modrými odrážkami
+            for den in dni_tyzdna + ["Týždenná ponuka"]:
+                final_menu_s = final_menu_s.replace(den, f"\n\n🔹 *{den}*")
+            
+            requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{final_menu_s.strip()}"})
+    except: pass
+
+if __name__ == "__main__":
+    ziskaj_a_posli_menu()
