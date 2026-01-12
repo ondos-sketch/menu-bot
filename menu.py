@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Bez zmeny) ---
+    # --- 1. EL TORO (Bez zmeny, funguje správne) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -34,52 +34,50 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Oprava formátovania cien a odstraňovanie po * alebo () ---
+    # --- 2. SENTAMI (Opravené ceny a vrátené oddelovače dní) ---
     try:
         res_s = requests.get("https://sentami.sk/kategoria/denne-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content.decode('utf-8', 'ignore'), 'html.parser')
         
-        # Získame text tak, aby sme zachovali štruktúru, ale odstránime nadbytočné medzery
-        lines = [line.strip() for line in soup_s.get_text(separator="\n").splitlines() if line.strip()]
-        full_text = "\n".join(lines)
+        # Získame riadky a najskôr opravíme rozbité ceny v celom texte
+        raw_text = soup_s.get_text(separator="\n", strip=True)
+        # Oprava cien rozdelených do riadkov: "8,1" + "0" + "€" -> "8,10 €"
+        raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
+        raw_text = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', raw_text)
 
-        if "Pondelok" in full_text:
-            start_s = full_text.find("Pondelok")
-            if "Späť" in full_text:
-                full_text = full_text.split("Späť")[0]
-            menu_s = full_text[start_s:].strip()
-
-            # OPRAVA ROZBITÝCH CIEN: spojí "8,1" + "0" + "€" do "8,10 €"
-            menu_s = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', menu_s)
-            menu_s = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', menu_s)
+        if "Pondelok" in raw_text:
+            start_s = raw_text.find("Pondelok")
+            if "Späť" in raw_text:
+                raw_text = raw_text.split("Späť")[0]
+            menu_s = raw_text[start_s:].strip()
 
             vycistene_riadky = []
             for r in menu_s.split('\n'):
                 r = r.strip()
-                if not r or r in ["1.", "2.", "3.", "Špeciál:", "Šalát:"]: 
-                    if r: vycistene_riadky.append(r)
-                    continue
+                if not r: continue
                 
-                # Ak riadok obsahuje cenu (napr. 8,10 €)
+                # Identifikácia dňa - pridáme oddelovač 🔹
+                if any(den == r for den in dni_tyzdna + ["Týždenná ponuka:"]):
+                    vycistene_riadky.append(f"\n🔹 *{r}*")
+                    continue
+
+                # Čistenie riadku s jedlom a cenou
                 if "€" in r:
                     match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                     cena = match_cena.group() if match_cena else ""
                     
-                    # Odstránime všetko od znaku ( alebo *
-                    r_clean = re.split(r'\(|\*', r)[0].strip()
+                    # Odstránenie všetkého od znaku ( alebo * (podľa vašej požiadavky)
+                    názov_jedla = re.split(r'\(|\*', r)[0].strip()
                     
-                    # Ak je to názov dňa, necháme tak, inak spojíme názov a cenu
-                    if any(den in r for den in dni_tyzdna + ["Týždenná ponuka"]):
-                        vycistene_riadky.append(f"🔹 *{r}*")
+                    # Ak po odrezaní niečo ostalo, spojíme to s jednou cenou
+                    if názov_jedla and názov_jedla not in ["1.", "2.", "Špeciál:", "Šalát:"]:
+                        vycistene_riadky.append(f"{názov_jedla} {cena}")
                     else:
-                        vycistene_riadky.append(f"{r_clean} {cena}")
+                        vycistene_riadky.append(r)
                 else:
                     vycistene_riadky.append(r)
 
             final_menu_s = "\n".join(vycistene_riadky)
-            # Vyčistíme duplicitné odrážky ak by vznikli
-            final_menu_s = final_menu_s.replace("🔹 🔹", "🔹")
-            
             requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{final_menu_s.strip()}"})
     except: pass
 
