@@ -46,22 +46,15 @@ def ziskaj_a_posli_menu():
                 text_s = text_s.split("Späť")[0]
             menu_s = text_s[start_s:].strip()
             
-            # 1. Odstránenie gramáže (napr. 150g, 0,33l)
-            menu_s = re.sub(r'\d+([.,]\d+)?\s*(g|l|ml|dcl)\b', '', menu_s, flags=re.IGNORECASE)
-            
-            # 2. Odstránenie textu od zátvorky ( po cenu (ponechá len cenu na konci riadku)
-            # Hľadá text, ktorý začína "(" a končí tesne pred sumou s "€"
-            menu_s = re.sub(r'\(.*?(?=\d+[,.]\d+\s*€)', '', menu_s)
-            
-            # 3. Odstránenie zvyšných alergénov v tvare /1,3,7/ ak tam ostali
-            menu_s = re.sub(r'/\s*[\d\s,]+/', '', menu_s)
-            
-            # Formátovanie dní
-            for den in dni_tyzdna + ["Týždenná ponuka"]:
-                menu_s = menu_s.replace(den, f"\n\n🔹 *{den}*")
-            
-            requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{menu_s.strip()}"})
-    except: pass
-
-if __name__ == "__main__":
-    ziskaj_a_posli_menu()
+            vycistene_riadky = []
+            for riadok in menu_s.split('\n'):
+                r = riadok.strip()
+                if not r: continue
+                
+                # Ak riadok obsahuje cenu (napr. 8,90 €), vymaž všetko medzi textom a cenou
+                if "€" in r:
+                    # Nájde pozíciu ceny (napr. 10,50 €)
+                    match_cena = re.search(r'\d+[,.]\d+\s*€', r)
+                    if match_cena:
+                        cena = match_cena.group()
+                        # Zoberie text pred prvou zátv
