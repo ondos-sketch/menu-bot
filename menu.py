@@ -34,65 +34,63 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Zjednotený formát s El Toro) ---
+    # --- 2. SENTAMI (Nová URL a nová štruktúra) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content.decode('utf-8', 'ignore'), 'html.parser')
+        
+        # Extrahujeme text tak, aby sme zachovali riadkovanie
         raw_text = soup_s.get_text(separator="\n", strip=True)
-        raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
+        
+        # Oprava: Spojenie ceny ak je rozdelená
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', raw_text)
-
-        if "Pondelok" in raw_text:
-            start_s = raw_text.find("Pondelok")
-            if "Späť" in raw_text:
-                raw_text = raw_text.split("Späť")[0]
-            menu_s = raw_text[start_s:].strip()
-
-            vycistene_riadky = []
-            prefix = "" 
-            prvy_riadok_po_dni = False
+        
+        lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
+        vycistene_riadky = []
+        skip_words = ["NAŠA PONUKA", "REŠTAURÁCIA", "KONTAKT", "OBEDOVÉ MENU", "DENNÉ MENU", "VYSKLADAJ"]
+        
+        je_polievka = False
+        
+        for line in lines:
+            if any(word in line.upper() for word in skip_words): continue
             
-            for r in menu_s.split('\n'):
-                r = r.strip()
-                if not r: continue
+            # Detekcia dňa
+            if any(den == line for den in dni_tyzdna + ["Týždenná ponuka"]):
+                vycistene_riadky.append(f"\n🔹 *{line}*")
+                je_polievka = True # Prvý riadok po dni v Sentami je polievka
+                continue
+            
+            # Spracovanie jedla s cenou
+            if "€" in line:
+                # Odstránenie gramáže a alergénov (všetko za ( alebo *)
+                parts = re.split(r'\(|\*', line)
+                nazov = parts[0].strip()
+                # Extrahuje cenu
+                match_cena = re.search(r'\d+[,.]\d+\s*€', line)
+                cena = match_cena.group() if match_cena else ""
                 
-                # Názov dňa
-                if any(den == r for den in dni_tyzdna + ["Týždenná ponuka:"]):
-                    vycistene_riadky.append(f"\n🔹 *{r}*")
-                    prefix = "" 
-                    prvy_riadok_po_dni = True # Budúci riadok bude polievka
-                    continue
-
-                # Kategória/Číslo
-                if re.match(r'^(\d+\.|Špeciál:|Šalát:)$', r):
-                    prefix = r
-                    prvy_riadok_po_dni = False
-                    continue
-
-                # Spracovanie jedla/polievky
-                if "€" in r:
-                    match_cena = re.search(r'\d+[,.]\d+\s*€', r)
-                    cena = match_cena.group() if match_cena else ""
-                    nazov = re.split(r'\(|\*', r)[0].strip()
-                    vycistene_riadky.append(f"{prefix} {nazov} {cena}".strip())
-                    prefix = ""
-                    prvy_riadok_po_dni = False
+                # Ak sme v režime polievky (prvý riadok pod dňom bez čísla)
+                if je_polievka and not re.match(r'^\d+\.', nazov):
+                    vycistene_riadky.append(f"🍜 *Polievka:* {nazov}")
+                    je_polievka = False
                 else:
-                    # Ak je to prvý text po dni a nemá cenu, je to polievka
-                    if prvy_riadok_po_dni:
-                        nazov_polievky = re.split(r'\(|\*', r)[0].strip()
-                        vycistene_riadky.append(f"🍜 *Polievka:* {nazov_polievky}")
-                        prvy_riadok_po_dni = False
-                    elif prefix:
-                        r = re.split(r'\(|\*', r)[0].strip()
-                        prefix = f"{prefix} {r}"
-                    else:
-                        vycistene_riadky.append(r)
+                    # Ak názov začína číslom (1., 2...), ponecháme, inak pridáme číslovanie ak chýba
+                    vycistene_riadky.append(f"{nazov} {cena}".strip())
+                    je_polievka = False
+            else:
+                # Riadky bez ceny (môžu to byť popisy alebo polievka)
+                if je_polievka:
+                    nazov = re.split(r'\(|\*', line)[0].strip()
+                    vycistene_riadky.append(f"🍜 *Polievka:* {nazov}")
+                    je_polievka = False
+                else:
+                    vycistene_riadky.append(line)
 
-            final_menu_s = "\n".join(vycistene_riadky)
-            final_menu_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', final_menu_s)
-            
-            requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{final_menu_s.strip()}"})
+        final_menu_s = "\n".join(vycistene_riadky)
+        # Odstránenie duplicitných cien ak by vznikli
+        final_menu_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', final_menu_s)
+        
+        requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{final_menu_s.strip()}"})
     except: pass
 
 if __name__ == "__main__":
