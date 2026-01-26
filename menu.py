@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Pôvodná funkčná verzia) ---
+    # --- 1. EL TORO (Nedotknutá funkčná verzia) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -25,45 +25,44 @@ def ziskaj_a_posli_menu():
                 den_nazov = bloky_dni[i]
                 den_text = bloky_dni[i+1].strip()
                 riadky = [r.strip() for r in den_text.split('\n') if r.strip()]
-                formátovaný_deň = f"\n\n🔹 *{den_nazov}*"
+                formát_e = f"\n\n🔹 *{den_nazov}*"
                 if riadky:
-                    formátovaný_deň += f"\n🍜 *Polievka:* {riadky[0]}"
+                    formát_e += f"\n🍜 *Polievka:* {riadky[0]}"
                     for idx, jedlo in enumerate(riadky[1:], 1):
-                        formátovaný_deň += f"\n{idx}. {jedlo}"
-                final_menu_e += formátovaný_deň
+                        formát_e += f"\n{idx}. {jedlo}"
+                final_menu_e += formát_e
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Zjednotený vizuál s El Toro) ---
+    # --- 2. SENTAMI (Oprava oddelenia dní a odstránenie duplicitného MENU 1, 2...) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
         content = soup_s.find('div', class_='entry-content')
+        # Použijeme separator, aby sme zachovali štruktúru dní
         raw_text = content.get_text(separator="\n", strip=True) if content else soup_s.get_text(separator="\n", strip=True)
         
         if "Polievka" in raw_text:
             raw_text = raw_text[raw_text.find("Polievka"):]
 
+        # Oprava rozbitých cien
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', raw_text)
 
         lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
         vycistene_menu = []
-        counter_jedla = 1
         posledny_text_bez_ceny = ""
 
         for r in lines:
-            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT"]): break
+            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT", "Hlboká cesta"]): break
             
-            # Detekcia dňa alebo Týždennej ponuky pre Sentami
-            is_day = any(den == r for den in dni_tyzdna)
+            # OPRAVA DETEKCIE DNÍ: Hľadáme presnú zhodu so zoznamom dní
+            is_day = any(den.lower() == r.lower() for den in dni_tyzdna)
             is_weekly = "Týždenná" in r or "VYSKLADAJ" in r
             
             if is_day or is_weekly:
-                názov_bloku = r if is_day else "Týždenná ponuka"
-                # Formátovanie identické s El Toro (Modrá odrážka + Bold)
-                vycistene_menu.append(f"\n🔹 *{názov_bloku}*")
-                counter_jedla = 1
+                názov_bloku = r.capitalize() if is_day else "Týždenná ponuka"
+                vycistene_menu.append(f"\n\n🔹 *{názov_bloku}*")
                 posledny_text_bez_ceny = ""
                 continue
 
@@ -71,22 +70,27 @@ def ziskaj_a_posli_menu():
                 match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                 cena = match_cena.group() if match_cena else ""
                 
+                # Očistenie názvu od balastu (gramáže, alergény)
                 nazov_v_riadku = re.split(r'\(|\*|\d+[,.]\d+', r)[0].strip()
-                nazov_v_riadku = re.sub(r'^(MENU|Menu)\s*\d+[:.]?\s*', '', nazov_v_riadku)
                 finálny_názov = nazov_v_riadku if len(nazov_v_riadku) > 3 else posledny_text_bez_ceny
                 
                 if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
-                    vycistene_menu.append(f"🍜 *Polievka:* {finálny_názov.replace('Polievka', '').strip(': ')}")
+                    # Formát polievky
+                    čistá_polievka = finálny_názov.replace('Polievka', '').strip(': ').strip()
+                    vycistene_menu.append(f"🍜 *Polievka:* {čistá_polievka}")
                 else:
                     if finálny_názov:
-                        vycistene_menu.append(f"MENU {counter_jedla}: {finálny_názov} {cena}")
-                        counter_jedla += 1
+                        # TU ODSTRAŇUJEME NAŠE PRIDANÉ "MENU 1:", použijeme len to, čo je na webe
+                        vycistene_menu.append(f"{finálny_názov} {cena}")
                 posledny_text_bez_ceny = ""
             else:
+                # Uložíme riadok bez ceny, ale odfiltrujeme gramáže
                 posledny_text_bez_ceny = re.split(r'\(|\*', r)[0].strip()
 
         result_s = "\n".join(vycistene_menu)
+        # Odstránenie duplicity cien ak by ostali
         result_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', result_s)
+        
         requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{result_s.strip()}"})
     except: pass
 
