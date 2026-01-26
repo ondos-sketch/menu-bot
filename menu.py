@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Pôvodná verzia - NEMEŇ) ---
+    # --- 1. EL TORO (Pôvodná funkčná verzia) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -34,15 +34,13 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Nová logika: Odstránenie textu nad "Polievka") ---
+    # --- 2. SENTAMI (Oprava číslovania MENU 1, MENU 2) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
-        
-        # Získame čistý text
         raw_text = soup_s.get_text(separator="\n", strip=True)
         
-        # OPRAVA: Odstránenie všetkého pred prvým výskytom slova "Polievka"
+        # Orezanie balastu pred polievkou
         if "Polievka" in raw_text:
             raw_text = raw_text[raw_text.find("Polievka"):]
 
@@ -53,46 +51,41 @@ def ziskaj_a_posli_menu():
         lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
         vycistene_menu = []
         
-        # Premenné pre formátovanie
-        aktualny_den = ""
+        counter_jedla = 1
         
         for r in lines:
-            # Preskočenie zjavného balastu pod menu
             if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT", "Hlboká cesta"]): break
             
-            # Detekcia dňa (ak riadok je názov dňa)
+            # Detekcia dňa - Reset počítadla menu
             if any(den == r for den in dni_tyzdna + ["Týždenná ponuka"]):
                 vycistene_menu.append(f"\n🔹 *{r}*")
+                counter_jedla = 1
                 continue
             
-            # Spracovanie riadku s jedlom/cenou
             if "€" in r:
                 match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                 cena = match_cena.group() if match_cena else ""
                 
-                # Orezanie názvu pred zátvorkou alebo hviezdičkou
+                # Orezanie názvu (všetko za ( alebo *)
                 nazov = re.split(r'\(|\*', r)[0].strip()
-                # Vyčistenie prefixov typu "MENU 1.:"
-                nazov = re.sub(r'^MENU\s+\d+\.:\s*', '', nazov, flags=re.IGNORECASE)
+                nazov = re.sub(r'^(MENU|Menu)\s*\d+[:.]?\s*', '', nazov) # Odstráni staré MENU 1 ak tam bolo
                 
-                # Ak riadok obsahuje slovo Polievka, sformátujeme ho špeciálne
                 if "Polievka" in r:
                     nazov_p = nazov.replace("Polievka", "").strip(": ").strip()
                     vycistene_menu.append(f"🍜 *Polievka:* {nazov_p}")
                 else:
-                    vycistene_menu.append(f"{nazov} {cena}")
+                    # Pridanie MENU 1:, MENU 2: atď.
+                    vycistene_menu.append(f"MENU {counter_jedla}: {nazov} {cena}")
+                    counter_jedla += 1
             
-            # Ak riadok nemá cenu, ale je to "Polievka" (napr. nadpis)
             elif "Polievka" in r:
                 nazov_p = r.replace("Polievka", "").strip(": ").strip()
                 if nazov_p:
                     vycistene_menu.append(f"🍜 *Polievka:* {nazov_p}")
-                else:
-                    # Ak je slovo "Polievka" v riadku samo, skúsime vziať ďalší riadok v ďalšom cykle
-                    pass
+                # Po slove polievka v riadku (aj bez ceny) sa resetuje počítadlo jedál
+                counter_jedla = 1
 
         result_s = "\n".join(vycistene_menu)
-        # Odstránenie duplicitných cien
         result_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', result_s)
 
         requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{result_s.strip()}"})
