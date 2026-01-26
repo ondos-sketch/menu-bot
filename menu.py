@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 
 def ziskaj_a_posli_menu():
-    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAEcGOcC4/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=dAQZOZvcdeC7pYOTXTbCMUDVhJfrqSO8gmy1cbocUxQ"
+    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAF14T8YI/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=Boziy19yv5w-4lpdFD2Mz0u6HSByFWMCznQTl6QxZTU"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
@@ -36,7 +36,7 @@ def ziskaj_a_posli_menu():
 
     # --- 2. SENTAMI (Zjednotený formát s El Toro) ---
     try:
-        res_s = requests.get("https://sentami.sk/kategoria/denne-menu/", headers=headers, timeout=15)
+        res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content.decode('utf-8', 'ignore'), 'html.parser')
         raw_text = soup_s.get_text(separator="\n", strip=True)
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
