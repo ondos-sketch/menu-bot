@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Oprava medzier medzi dňami) ---
+    # --- 1. EL TORO (Ponechaná stabilná verzia) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -23,9 +23,7 @@ def ziskaj_a_posli_menu():
             bloky_dni = re.split(r'(Pondelok|Utorok|Streda|Štvrtok|Piatok)', raw_menu)
             for i in range(1, len(bloky_dni), 2):
                 den_nazov = bloky_dni[i]
-                den_text = bloky_dni[i+1].strip()
-                riadky = [r.strip() for r in den_text.split('\n') if r.strip()]
-                # Upravené: len jeden prázdny riadok pred dňom (\n\n namiesto viacerých)
+                riadky = [r.strip() for r in bloky_dni[i+1].split('\n') if r.strip()]
                 formát_e = f"\n\n🔹 *{den_nazov}*"
                 if riadky:
                     formát_e += f"\n🍜 *Polievka:* {riadky[0]}"
@@ -35,7 +33,7 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Oprava medzier medzi dňami a položkami ponuky) ---
+    # --- 2. SENTAMI (Oprava medzier a oddelenie týždenného menu) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
@@ -56,7 +54,8 @@ def ziskaj_a_posli_menu():
         for r in lines:
             if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT"]): break
             
-            is_special_section = any(x in r.upper() for x in ["TÝŽDENNÉ MENU", "ŠPECIÁL", "ŠALÁT", "VYSKLADAJ"])
+            # Detekcia špeciálnych sekcií
+            is_special_header = any(x in r.upper() for x in ["TÝŽDENNÉ MENU", "ŠPECIÁL", "ŠALÁT", "VYSKLADAJ"])
             
             if "€" in r:
                 match_cena = re.search(r'\d+[,.]\d+\s*€', r)
@@ -67,28 +66,39 @@ def ziskaj_a_posli_menu():
                 
                 if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
                     if index_dna < len(dni_tyzdna):
-                        # Upravené: len jeden prázdny riadok (\n\n)
-                        vycistene_menu.append(f"\n\n🔹 *{dni_tyzdna[index_dna]}*")
+                        # Pridáme len jeden prázdny riadok pred deň
+                        vycistene_menu.append(f"🔹 *{dni_tyzdna[index_dna]}*")
                         index_dna += 1
+                    
                     čistá_p = finálny_názov.replace('Polievka', '').strip(': ').strip()
                     vycistene_menu.append(f"🍜 *Polievka:* {čistá_p}")
                 else:
-                    # Pridané: voľný riadok \n pred každou špeciálnou položkou (🔹)
+                    # Kontrola, či ide o začiatok špeciálnej položky
                     is_special_item = any(x in finálny_názov.upper() for x in ["TÝŽDENNÉ", "ŠPECIÁL", "ŠALÁT"])
-                    prefix = "\n🔹 " if is_special_item else ""
-                    if finálny_názov:
-                        vycistene_menu.append(f"{prefix}{finálny_názov} {cena}".strip())
+                    
+                    if is_special_item:
+                        # PRÁZDNY RIADOK PRED TÝŽDENNÝM MENU / ŠPECIÁLOM
+                        vycistene_menu.append(f"\n🔹 {finálny_názov} {cena}")
+                    elif finálny_názov:
+                        vycistene_menu.append(f"{finálny_názov} {cena}")
                 
                 posledny_text_bez_ceny = ""
-            elif is_special_section:
+            elif is_special_header:
                 posledny_text_bez_ceny = r
             else:
                 posledny_text_bez_ceny = re.split(r'\(|\*', r)[0].strip()
 
-        result_s = "\n".join(vycistene_menu)
-        result_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', result_s)
+        # Spojíme riadky, pričom pred každý deň vložíme jeden prázdny riadok
+        final_output_s = ""
+        for line in vycistene_menu:
+            if "🔹 *Pondelok*" in line or "🔹 *Utorok*" in line or "🔹 *Streda*" in line or "🔹 *Štvrtok*" in line or "🔹 *Piatok*" in line:
+                final_output_s += "\n\n" + line
+            else:
+                final_output_s += "\n" + line
+
+        final_output_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', final_output_s).strip()
         
-        requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{result_s.strip()}"})
+        requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{final_output_s}"})
     except: pass
 
 if __name__ == "__main__":
