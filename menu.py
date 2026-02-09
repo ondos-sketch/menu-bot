@@ -3,7 +3,8 @@ from bs4 import BeautifulSoup
 import re
 
 def ziskaj_a_posli_menu():
-    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAEcGOcC4/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=dAQZOZvcdeC7pYOTXTbCMUDVhJfrqSO8gmy1cbocUxQ"
+    # Tvoj overený Webhook URL
+    webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAF14T8YI/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=Boziy19yv5w-4lpdFD2Mz0u6HSByFWMCznQTl6QxZTU"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
@@ -30,18 +31,21 @@ def ziskaj_a_posli_menu():
                     for idx, jedlo in enumerate(riadky[1:], 1):
                         final_menu_e += f"\n{idx}. {jedlo}"
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
-    except: pass
+    except Exception as e:
+        print(f"Chyba El Toro: {e}")
 
-    # --- 2. SENTAMI (Oprava medzier a chybných odrážok) ---
+    # --- 2. SENTAMI (Nová robustná logika s fixom na Piatok) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
         content = soup_s.find('div', class_='entry-content')
         raw_text = content.get_text(separator="\n", strip=True) if content else soup_s.get_text(separator="\n", strip=True)
         
+        # Odstrihneme úvodný text až po prvú polievku
         if "Polievka" in raw_text:
             raw_text = raw_text[raw_text.find("Polievka"):]
 
+        # Oprava rozbitých cien (spojenie riadkov s €)
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', raw_text)
 
@@ -51,14 +55,17 @@ def ziskaj_a_posli_menu():
         posledny_text_bez_ceny = ""
 
         for r in lines:
-            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT"]): break
+            # Ak narazíme na pätičku webu, končíme
+            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT", "GALÉRIA"]): break
             
             if "€" in r:
                 match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                 cena = match_cena.group() if match_cena else ""
                 nazov_raw = re.split(r'\(|\*|\d+[,.]\d+', r)[0].strip()
+                # Ak je názov v riadku príliš krátky, použijeme text z riadku predtým
                 final_nazov = nazov_raw if len(nazov_raw) > 5 else posledny_text_bez_ceny
                 
+                # Ak text obsahuje "Polievka", priradíme mu názov dňa podľa poradia
                 if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
                     if index_dna < len(dni_tyzdna):
                         vycistene_menu.append(f"\n🔹 *{dni_tyzdna[index_dna]}*")
@@ -66,27 +73,24 @@ def ziskaj_a_posli_menu():
                     cista_p = final_nazov.replace('Polievka', '').strip(': ').strip()
                     vycistene_menu.append(f"🍜 *Polievka:* {cista_p}")
                 else:
-                    # Odrážku pridáme len ak názov začína slovami Týždenné, Špeciál alebo Šalát (na začiatku riadku)
-                    is_special_section = bool(re.match(r'^(Týždenné|Špeciál|Šalát)', final_nazov, re.I))
-                    if is_special_section:
+                    # Kontrola špeciálnych položiek (Týždenné menu, Špeciál, Šalát)
+                    is_special = bool(re.match(r'^(Týždenné|Špeciál|Šalát)', final_nazov, re.I))
+                    if is_special:
                         vycistene_menu.append(f"\n🔹 {final_nazov} {cena}")
                     else:
                         vycistene_menu.append(f"{final_nazov} {cena}")
                 posledny_text_bez_ceny = ""
             else:
+                # Ak riadok nemá cenu, uložíme ho ako potenciálny názov (bez alergénov)
                 posledny_text_bez_ceny = re.split(r'\(|\*', r)[0].strip()
 
-        # Finálne zostavenie s korektnými prázdnymi riadkami
-        final_output_s = ""
-        for line in vycistene_menu:
-            if "🔹 *" in line: # Nový deň
-                final_output_s += "\n" + line
-            else:
-                final_output_s += "\n" + line
-
-        final_output_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', final_output_s).strip()
-        requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n\n{final_output_s}"})
-    except: pass
+        # Spojenie riadkov a finálne vyčistenie medzier
+        final_output_s = "\n".join(vycistene_menu)
+        final_output_s = re.sub(r'\n{3,}', '\n\n', final_output_s) 
+        
+        requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n\n{final_output_s.strip()}"})
+    except Exception as e:
+        print(f"Chyba Sentami: {e}")
 
 if __name__ == "__main__":
     ziskaj_a_posli_menu()
