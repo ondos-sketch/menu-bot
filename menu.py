@@ -7,7 +7,7 @@ def ziskaj_a_posli_menu():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
-    # --- 1. EL TORO (Pôvodná overená verzia) ---
+    # --- 1. EL TORO (Pôvodná overená verzia, ktorú si potvrdil ako OK) ---
     try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
@@ -32,17 +32,18 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Návrat k stabilnej logike s opravou dní) ---
+    # --- 2. SENTAMI (Opravená verzia s vynúteným názvom dňa) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
         content = soup_s.find('div', class_='entry-content')
         raw_text = content.get_text(separator="\n", strip=True) if content else soup_s.get_text(separator="\n", strip=True)
         
-        # Orezanie len balastu nad prvou polievkou
+        # Odstránime balast pred prvou polievkou
         if "Polievka" in raw_text:
             raw_text = raw_text[raw_text.find("Polievka"):]
 
+        # Oprava rozbitých cien
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(\d+)\n+(€)', r'\1\2 \3', raw_text)
         raw_text = re.sub(r'(\d+[,.]\d+)\n+(€)', r'\1 \2', raw_text)
 
@@ -58,18 +59,20 @@ def ziskaj_a_posli_menu():
                 match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                 cena = match_cena.group() if match_cena else ""
                 nazov_v_riadku = re.split(r'\(|\*|\d+[,.]\d+', r)[0].strip()
-                finálny_názov = nazov_v_riadku if len(nazov_v_riadku) > 3 else posledny_text_bez_ceny
+                finalny_nazov = nazov_v_riadku if len(nazov_v_riadku) > 3 else posledny_text_bez_ceny
                 
+                # KLÚČOVÁ ZMENA: Ak riadok obsahuje "Polievka", VŽDY vložíme názov dňa zo zoznamu
                 if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
                     if index_dna < len(dni_tyzdna):
                         vycistene_menu.append(f"\n🔹 *{dni_tyzdna[index_dna]}*")
                         index_dna += 1
-                    čistá_p = finálny_názov.replace('Polievka', '').strip(': ').strip()
-                    vycistene_menu.append(f"🍜 *Polievka:* {čistá_p}")
+                    cista_p = finalny_nazov.replace('Polievka', '').strip(': ').strip()
+                    vycistene_menu.append(f"🍜 *Polievka:* {cista_p}")
                 else:
-                    is_special = any(x in finálny_názov.upper() for x in ["TÝŽDENNÉ", "ŠPECIÁL", "ŠALÁT"])
+                    # Spracovanie bežných jedál a špeciálov
+                    is_special = any(x in finalny_nazov.upper() for x in ["TÝŽDENNÉ", "ŠPECIÁL", "ŠALÁT"])
                     prefix = "\n🔹 " if is_special else ""
-                    vycistene_menu.append(f"{prefix}{finálny_názov} {cena}".strip())
+                    vycistene_menu.append(f"{prefix}{finalny_nazov} {cena}".strip())
                 posledny_text_bez_ceny = ""
             else:
                 posledny_text_bez_ceny = re.split(r'\(|\*', r)[0].strip()
