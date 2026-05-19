@@ -34,7 +34,7 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Pôvodná verzia s fixom na otočené piatkové poradie) ---
+    # --- 2. SENTAMI (Inteligentná detekcia: Pon-Štv = 3 jedlá, Pia = 4 jedlá + fix na MENU 1.) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
@@ -49,42 +49,59 @@ def ziskaj_a_posli_menu():
 
         lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
         vycistene_menu = []
+        
         index_dna = 0
+        hlavne_jedla_v_dni = 0
         posledny_text_bez_ceny = ""
-        pocet_jediel_v_dni = 0
+        novy_den_pripraveny = True
 
         for r in lines:
-            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT"]): break
+            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT", "GALÉRIA"]): break
             
             if "€" in r:
                 match_cena = re.search(r'\d+[,.]\d+\s*€', r)
                 cena = match_cena.group() if match_cena else ""
                 
                 nazov_v_riadku = re.split(r'\(|\*|\d+[,.]\d+', r)[0].strip()
-                finálny_názov = nazov_v_riadku if len(nazov_v_riadku) > 5 else posledny_text_bez_ceny
+                finalny_nazov = nazov_v_riadku if len(nazov_v_riadku) > 5 else posledny_text_bez_ceny
                 
-                # FIX: Ak sme v Štvrtku (index_dna == 4), už sme zapísali nejaké jedlá (pocet_jediel_v_dni > 1) 
-                # a zrazu uvidíme nové jedlo začiatočné na "1." bez toho, aby predtým padlo slovo Polievka,
-                # vieme, že toto je už piatkové Menu č. 1. Prepneme index na Piatok.
-                if index_dna == 4 and pocet_jediel_v_dni >= 2 and finálny_názov.startswith("1."):
-                    vycistene_menu.append(f"\n🔹 *Piatok*")
-                    index_dna = 5 # Sme v piatku
+                # Zisťujeme, či ide o doplnkovú polievku za 2 eurá, ktorú nechceme počítať ako hlavný chod
+                je_doplnkova_polievka = "2.00" in cena or "2,00" in cena
                 
-                if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
-                    # Štandardné prepínanie dní, ak prichádza polievka ako prvá
+                # POISTKA 1: Ak v texte vyslovene svieti "MENU 1." a už sme v daný deň niečo zapísali,
+                # znamená to, že reštaurácia prešla na nový deň (otočené piatkové poradie)
+                if "MENU 1." in finalny_nazov.upper() and hlavne_jedla_v_dni > 0:
+                    novy_den_pripraveny = True
+
+                # Vloženie nadpisu dňa na začiatok bloku
+                if novy_den_pripraveny and not je_doplnkova_polievka:
                     if index_dna < len(dni_tyzdna):
                         vycistene_menu.append(f"\n🔹 *{dni_tyzdna[index_dna]}*")
                         index_dna += 1
-                        pocet_jediel_v_dni = 0
-                    
-                    čistá_p = finálny_názov.replace('Polievka', '').strip(': ').strip()
-                    vycistene_menu.append(f"🍜 *Polievka:* {čistá_p}")
+                    novy_den_pripraveny = False
+                    hlavne_jedla_v_dni = 0
+
+                if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
+                    cista_p = finalny_nazov.replace('Polievka', '').strip(': ').strip()
+                    vycistene_menu.append(f"🍜 *Polievka:* {cista_p}")
                 else:
-                    is_special_item = any(x in finálny_názov.upper() for x in ["TÝŽDENNÉ", "ŠPECIÁL", "ŠALÁT"])
-                    prefix = "\n🔹 " if is_special_item else ""
-                    if finálny_názov:
-                        vycistene_menu.append(f"{prefix}{finálny_názov} {cena}".strip())
-                        pocet_jediel_v_dni += 1
+                    is_special_item = any(x in finalny_nazov.upper() for x in ["TÝŽDENNÉ", "ŠPECIÁL", "ŠALÁT"])
+                    
+                    if is_special_item:
+                        vycistene_menu.append(f"\n🔹 {finalny_nazov} {cena}")
+                    else:
+                        if finalny_nazov:
+                            vycistene_menu.append(f"{finalny_nazov} {cena}".strip())
+                            if not je_doplnkova_polievka:
+                                hlavne_jedla_v_dni += 1
+                
+                # POISTKA 2: Dynamický limit jedál podľa aktuálneho dňa. 
+                # Ak spracovávame Pondelok až Štvrtok (index_dna 1 až 4), limit sú 3 jedlá.
+                # Ak sme v Piatok (index_dna == 5), limit sú 4 jedlá.
+                limit_jediel = 4 if index_dna == 5 else 3
+                
+                if hlavne_jedla_v_dni >= limit_jediel:
+                    novy_den_pripraveny = True
                 
                 posledny_text_bez_ceny = ""
             else:
