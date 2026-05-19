@@ -34,7 +34,7 @@ def ziskaj_a_posli_menu():
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
     except: pass
 
-    # --- 2. SENTAMI (Pôvodná overená funkčná verzia) ---
+    # --- 2. SENTAMI (Pôvodná overená funkčná verzia - opravená syntax) ---
     try:
         res_s = requests.get("https://sentami.sk/obedove-menu/", headers=headers, timeout=15)
         soup_s = BeautifulSoup(res_s.content, 'html.parser')
@@ -52,4 +52,37 @@ def ziskaj_a_posli_menu():
         index_dna = 0
         posledny_text_bez_ceny = ""
 
-        for r in
+        for r in lines:
+            if any(x in r.upper() for x in ["DOMOV", "RESERVÁCIA", "KONTAKT", "GALÉRIA"]): break
+            
+            if "€" in r:
+                match_cena = re.search(r'\d+[,.]\d+\s*€', r)
+                cena = match_cena.group() if match_cena else ""
+                
+                nazov_v_riadku = re.split(r'\(|\*|\d+[,.]\d+', r)[0].strip()
+                finálny_názov = nazov_v_riadku if len(nazov_v_riadku) > 5 else posledny_text_bez_ceny
+                
+                if "Polievka" in r or "Polievka" in posledny_text_bez_ceny:
+                    if index_dna < len(dni_tyzdna):
+                        vycistene_menu.append(f"\n🔹 *{dni_tyzdna[index_dna]}*")
+                        index_dna += 1
+                    čistá_p = finálny_názov.replace('Polievka', '').strip(': ').strip()
+                    vycistene_menu.append(f"🍜 *Polievka:* {čistá_p}")
+                else:
+                    is_special_item = any(x in finálny_názov.upper() for x in ["TÝŽDENNÉ", "ŠPECIÁL", "ŠALÁT"])
+                    prefix = "\n🔹 " if is_special_item else ""
+                    if finálny_názov:
+                        vycistene_menu.append(f"{prefix}{finálny_názov} {cena}".strip())
+                
+                posledny_text_bez_ceny = ""
+            else:
+                posledny_text_bez_ceny = re.split(r'\(|\*', r)[0].strip()
+
+        result_s = "\n".join(vycistene_menu)
+        result_s = re.sub(r'(\d+[,.]\d+\s*€)\s+\1', r'\1', result_s)
+        
+        requests.post(webhook_url, json={"text": f"🥗 *SENTAMI – TÝŽDENNÉ MENU*\n{result_s.strip()}"})
+    except: pass
+
+if __name__ == "__main__":
+    ziskaj_a_posli_menu()
