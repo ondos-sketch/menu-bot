@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
+
 def ziskaj_a_posli_menu():
     webhook_url = "https://chat.googleapis.com/v1/spaces/AAQAEcGOcC4/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=dAQZOZvcdeC7pYOTXTbCMUDVhJfrqSO8gmy1cbocUxQ"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
