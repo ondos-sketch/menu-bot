@@ -9,31 +9,31 @@ def ziskaj_a_posli_menu():
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
     # --- 1. EL TORO (Pôvodná overená verzia) ---
-    try:
-        res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
-        soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
-        text_e = soup_e.get_text(separator="\n", strip=True)
-        start = re.search(r"Pondelok", text_e)
-        end = re.search(r"Ponuka jedál\s*–\s*Nepretržité menu", text_e)
-        if start and end:
-            raw_menu = text_e[start.start():end.start()].strip()
-            raw_menu = re.sub(r'\d{2}\.\d{2}\.\d{4}', '', raw_menu)
-            raw_menu = re.sub(r'\|\s*', '', raw_menu)
-            raw_menu = re.sub(r'\s\d+(,\s*\d+)*', '', raw_menu)
-            final_menu_e = ""
-            bloky_dni = re.split(r'(Pondelok|Utorok|Streda|Štvrtok|Piatok)', raw_menu)
-            for i in range(1, len(bloky_dni), 2):
-                den_nazov = bloky_dni[i]
-                den_text = bloky_dni[i+1].strip()
-                riadky = [r.strip() for r in den_text.split('\n') if r.strip()]
-                formát_e = f"\n\n🔹 *{den_nazov}*"
-                if riadky:
-                    formát_e += f"\n🍜 *Polievka:* {riadky[0]}"
-                    for idx, jedlo in enumerate(riadky[1:], 1):
-                        formát_e += f"\n{idx}. {jedlo}"
-                final_menu_e += formát_e
-            requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
-    except: pass
+    #  try:
+     #   res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
+    #    soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
+    #    text_e = soup_e.get_text(separator="\n", strip=True)
+    #    start = re.search(r"Pondelok", text_e)
+    #    end = re.search(r"Ponuka jedál\s*–\s*Nepretržité menu", text_e)
+     #   if start and end:
+    #        raw_menu = text_e[start.start():end.start()].strip()
+    #        raw_menu = re.sub(r'\d{2}\.\d{2}\.\d{4}', '', raw_menu)
+    #        raw_menu = re.sub(r'\|\s*', '', raw_menu)
+    #        raw_menu = re.sub(r'\s\d+(,\s*\d+)*', '', raw_menu)
+     #       final_menu_e = ""
+    #        bloky_dni = re.split(r'(Pondelok|Utorok|Streda|Štvrtok|Piatok)', raw_menu)
+    #        for i in range(1, len(bloky_dni), 2):
+    #            den_nazov = bloky_dni[i]
+    #            den_text = bloky_dni[i+1].strip()
+     #           riadky = [r.strip() for r in den_text.split('\n') if r.strip()]
+     #           formát_e = f"\n\n🔹 *{den_nazov}*"
+     #           if riadky:
+      #              formát_e += f"\n🍜 *Polievka:* {riadky[0]}"
+       #             for idx, jedlo in enumerate(riadky[1:], 1):
+      #                  formát_e += f"\n{idx}. {jedlo}"
+      #          final_menu_e += formát_e
+      #      requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
+   # except: pass
 
     # --- 2. SENTAMI (Pôvodná overená funkčná verzia - opravená syntax) ---
     try:
