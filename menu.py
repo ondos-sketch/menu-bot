@@ -36,11 +36,8 @@ def ziskaj_a_posli_menu():
             
             requests.post(webhook_url, json={"text": f"🥩 *EL TORO – TÝŽDENNÉ MENU*{final_menu_e}"})
             print("El Toro úspešne odoslané.")
-        else:
-            print("El Toro: Nenašiel sa začiatok alebo koniec menu na stránke.")
-            
     except Exception as e:
-        print(f"Chyba pri spracovaní El Toro: {e}")
+        print(f"Chyba El Toro: {e}")
 
     # --- 2. SENTAMI ---
     try:
@@ -94,10 +91,9 @@ def ziskaj_a_posli_menu():
             print("Sentami úspešne odoslané.")
         else:
             requests.post(webhook_url, json={"text": "🥗 *SENTAMI – TÝŽDENNÉ MENU*\n⚠️ _Menu na tento týždeň zatiaľ nie je na webe dostupné._"})
-            print("Sentami: Nenašlo sa žiadne menu.")
             
     except Exception as e:
-        print(f"Chyba pri spracovaní Sentami: {e}")
+        print(f"Chyba Sentami: {e}")
 
 if __name__ == "__main__":
     ziskaj_a_posli_menu()
