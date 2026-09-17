@@ -9,7 +9,7 @@ def ziskaj_a_posli_menu():
     dni_tyzdna = ["Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok"]
 
     # --- 1. EL TORO (Pôvodná overená verzia) ---
-      try:
+    try:
         res_e = requests.get("https://www.eltoro.sk/index.php", headers=headers, timeout=15)
         soup_e = BeautifulSoup(res_e.content.decode('utf-8', 'ignore'), 'html.parser')
         text_e = soup_e.get_text(separator="\n", strip=True)
